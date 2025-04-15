@@ -1,0 +1,218 @@
+on:
+    schedule:
+     - cron:  '0 0 * * 0'
+    workflow_dispatch:
+    repository_dispatch:
+      types: [webhook]
+    push:
+      paths-ignore:
+        - Dockerfile
+        - README.md
+      branches:
+        - master
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        env:
+            REPO_BACKEND: EventFlow_Backend
+            REPO_FRONTEND: EventFlow_Web
+            REPO_CI: EventFlow_CI
+        steps:
+            - name: Setup Deploy Keys
+              env:
+                EF_BACKEND: ${{ secrets.EF_BACKEND }}
+                EF_FRONTEND: ${{ secrets.EF_FRONTEND }}
+                EF_CI: ${{ secrets.EF_CI }}
+              run: |
+                mkdir -p $HOME/.ssh
+
+                echo "$EF_BACKEND" > $HOME/.ssh/ef_backend
+                echo "$EF_FRONTEND" > $HOME/.ssh/ef_frontend
+                echo "$EF_CI" > $HOME/.ssh/ef_ci
+
+                chmod 0600 $HOME/.ssh/ef*
+
+                echo "
+                    Host backend.eventflow
+                        Hostname github.com
+                        IdentityFile=$HOME/.ssh/ef_backend
+                        User git
+
+                    Host frontend.eventflow
+                        Hostname github.com
+                        IdentityFile=$HOME/.ssh/ef_frontend
+                        User git
+
+                    Host ci.eventflow
+                        Hostname github.com
+                        IdentityFile=$HOME/.ssh/ef_ci
+                        User git
+                " >> $HOME/.ssh/config
+
+            - name: Setup PostgreSQL
+              run: |
+                sudo apt install -y postgresql-common
+                yes | sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh
+                sudo apt install -y postgresql-16
+                sudo systemctl start postgresql.service
+                sudo -u postgres bash -c "psql -c \"CREATE USER sephera WITH PASSWORD 'ci';\""
+                sudo -u postgres bash -c "psql -c \"CREATE DATABASE eventflow;\""
+                sudo -u postgres bash -c "psql -c \"GRANT ALL ON DATABASE eventflow TO sephera;\""
+                sudo -u postgres bash -c "psql -c \"ALTER DATABASE eventflow OWNER TO sephera;\""
+
+            - name: Setup .NET 9 SDK
+              uses: actions/setup-dotnet@v4
+              with:
+                dotnet-version: '9.0.x'
+
+            - name: Setup .NET tools
+              run: |
+                dotnet tool install dotnet-ef --global
+
+            - name: Build and Test Backend
+              run: |
+                git clone git@backend.eventflow:${{ github.repository_owner }}/${{ env.REPO_BACKEND }}.git ${{ github.workspace }}/backend
+
+                pushd ${{ github.workspace }}/backend
+
+                # Add Dummy Secrets
+                echo "{
+                    \"ConnectionStrings\": {
+                      \"DefaultConnection\": \"Host=localhost; Database=eventflow; Username=sephera; Password=ci\"
+                    },
+                    \"ApiKeys\": {
+                      \"Postmark\": \"Dummy API Key\"
+                    },
+                    \"Authentication\": {
+                      \"Google\": {
+                        \"ClientId\": \"Dummy API Key\",
+                        \"ClientSecret\": \"Dummy API Key\"
+                      },
+                      \"Microsoft\": {
+                        \"ClientId\": \"Dummy API Key\",
+                        \"ClientSecret\": \"Dummy API Key\"
+                      }
+                    }
+                }" > EventFlow/appsettings.Secrets.json
+
+                # Restore
+                dotnet restore
+
+                # Build and Publish a Release
+                dotnet build EventFlow/EventFlow.csproj -c Release --no-restore
+                dotnet publish EventFlow/EventFlow.csproj -c Release -o ${{ github.workspace }}/out --no-build
+
+                # Test Database Migrations
+                dotnet ef migrations bundle --project EventFlow/EventFlow.csproj --configuration Release -o ${{ github.workspace }}/out/DbUpdate -f
+
+                pushd ${{ github.workspace }}/out
+                ./DbUpdate
+                popd
+
+                popd
+
+            - name: Build and Test Frontend
+              run: |
+                git clone git@frontend.eventflow:${{ github.repository_owner }}/${{ env.REPO_FRONTEND }}.git ${{ github.workspace }}/frontend
+
+                pushd ${{ github.workspace }}/frontend/frontend
+
+                # Restore
+                npm install
+
+                # Build and Publish a Release
+                # Temporarily disable warnings-as-error before the frontend team fixes them.
+                CI=false BUILD_PATH="${{ github.workspace }}/out/wwwroot" npm run build
+
+                popd
+
+            - name: Integration Testing
+              run: |
+                set +e
+
+                pushd ${{ github.workspace }}/out
+
+                timeout 1m dotnet EventFlow.dll
+                RETURN_CODE=$?
+                if [ "$RETURN_CODE" -eq "124" ]; then
+                  # The server ran for 1m without failing
+                  exit 0
+                else
+                  exit 1
+                fi
+
+                popd
+
+            - name: Create Tarball
+              run: |
+                pushd ${{ github.workspace }}/out
+                fileName=${{ github.workspace }}/eventflow
+                tar -cf $fileName.tar *
+                gzip -9 < $fileName.tar > $fileName.tar.gz
+                popd
+
+            - name: Create Release
+              if: ${{ github.ref == 'refs/heads/master' }}
+              uses: marvinpinto/action-automatic-releases@latest
+              with:
+                repo_token: "${{ secrets.GITHUB_TOKEN }}"
+                automatic_release_tag: eventflow-${{ github.run_number }}-${{ github.run_attempt }}
+                prerelease: false
+                title: EventFlow
+                files: |
+                    ${{ github.workspace }}/eventflow.tar.gz
+
+            - name: Write Dockerfile
+              if: ${{ github.ref == 'refs/heads/master' }}
+              run: |
+                git clone git@ci.eventflow:${{ github.repository_owner }}/${{ env.REPO_CI }}.git ci
+
+                pushd ci
+
+                DATE=$(date)
+
+                echo "
+                    # Generated by EventFlow CI on $DATE
+                    # DO NOT EDIT.
+
+                    FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build-env
+                    WORKDIR /App
+
+                    ENV PATH=\"\${PATH}:/root/.dotnet/tools\"
+
+                    # Download archive
+                    RUN curl -SL ${{ github.server_url }}/${{ github.repository }}/releases/latest/download/eventflow.tar.gz | tar -xzf -
+
+                    # Load development secrets & copy for publish
+                    RUN --mount=type=secret,id=appsettings_Secrets_json,dst=/etc/secrets/appsettings.Secrets.json \
+                        cp /etc/secrets/appsettings.Secrets.json .
+
+                    # Synchronize database state
+                    RUN ./DbUpdate
+
+                    # Build runtime image
+                    FROM mcr.microsoft.com/dotnet/aspnet:9.0
+                    WORKDIR /App
+                    COPY --from=build-env /App .
+                    ENTRYPOINT [\"dotnet\", \"EventFlow.dll\"]
+                " > Dockerfile
+
+                git add .
+
+                git config user.name "EventFlow CI"
+                git config user.email "ci@ef.trungnt2910.com"
+
+                git commit -m "deploy: $DATE"
+
+                # TODO: Race condition with human user?
+                git push
+
+                popd
