@@ -1,9 +1,6 @@
 on:
-    schedule:
-     - cron:  '0 0 * * 0'
     workflow_dispatch:
     repository_dispatch:
-      types: [webhook]
     push:
       paths-ignore:
         - Dockerfile
@@ -19,7 +16,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-    build:
+    ci:
+        name: Integration Testing
         runs-on: ubuntu-latest
         env:
             REPO_BACKEND: EventFlow_Backend
@@ -109,6 +107,9 @@ jobs:
                 # Build and Publish a Release
                 dotnet build EventFlow/EventFlow.csproj -c Release --no-restore
                 dotnet publish EventFlow/EventFlow.csproj -c Release -o ${{ github.workspace }}/out --no-build
+
+                # Backend Unit Tests
+                dotnet test -c Release
 
                 # Test Database Migrations
                 dotnet ef migrations bundle --project EventFlow/EventFlow.csproj --configuration Release -o ${{ github.workspace }}/out/DbUpdate -f
