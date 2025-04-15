@@ -31,15 +31,6 @@ jobs:
                         User git
                 " >> $HOME/.ssh/config
 
-            - name: Setup .NET 9 SDK
-              uses: actions/setup-dotnet@v4
-              with:
-                dotnet-version: '9.0.x'
-
-            - name: Setup .NET Tools
-              run: |
-                dotnet tool install dotnet-ef --global
-
             - name: Export URLs
               run: |
                 echo "URL_STATUS=${{ github.api_url }}/repos/${{ github.repository_owner }}/${{ env.REPO_FRONTEND }}/statuses/${{ env.COMMIT }}" >> $GITHUB_ENV
