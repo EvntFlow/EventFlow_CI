@@ -65,7 +65,7 @@ jobs:
               run: |
                 git clone git@frontend.eventflow:${{ github.repository_owner }}/${{ env.REPO_FRONTEND }}.git ${{ github.workspace }}/frontend
 
-                pushd frontend
+                pushd frontend/frontend
                 npm install
                 npm run build
                 popd
