@@ -130,8 +130,7 @@ jobs:
                 npm install
 
                 # Build and Publish a Release
-                # Temporarily disable warnings-as-error before the frontend team fixes them.
-                CI=false BUILD_PATH="${{ github.workspace }}/out/wwwroot" npm run build
+                BUILD_PATH="${{ github.workspace }}/out/wwwroot" npm run build
 
                 popd
 
