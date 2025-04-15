@@ -1,0 +1,104 @@
+on:
+    repository_dispatch:
+        types: [EventFlow_Backend]
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.event.client_payload.after }}
+  cancel-in-progress: true
+
+jobs:
+    ci:
+        name: Unit Testing (Backend)
+        runs-on: ubuntu-latest
+        env:
+            REPO_BACKEND: EventFlow_Backend
+            COMMIT: ${{ github.event.client_payload.after }}
+        steps:
+            - name: Setup Deploy Keys
+              env:
+                EF_BACKEND: ${{ secrets.EF_BACKEND }}
+              run: |
+                mkdir -p $HOME/.ssh
+
+                echo "$EF_BACKEND" > $HOME/.ssh/ef_backend
+
+                chmod 0600 $HOME/.ssh/ef*
+
+                echo "
+                    Host backend.eventflow
+                        Hostname github.com
+                        IdentityFile=$HOME/.ssh/ef_backend
+                        User git
+                " >> $HOME/.ssh/config
+
+            - name: Setup .NET 9 SDK
+              uses: actions/setup-dotnet@v4
+              with:
+                dotnet-version: '9.0.x'
+
+            - name: Setup .NET Tools
+              run: |
+                dotnet tool install dotnet-ef --global
+
+            - name: Export URLs
+              run: |
+                echo "URL_STATUS=${{ github.api_url }}/repos/${{ github.repository_owner }}/${{ env.REPO_BACKEND }}/statuses/${{ env.COMMIT }}" >> $GITHUB_ENV
+                echo "URL_WORKFLOW=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_ENV
+
+            - name: Mark Commit Status
+              run: |
+                curl -L \
+                    -X POST \
+                    -H "Accept: application/vnd.github+json" \
+                    -H "Authorization: Bearer ${{ secrets.EF_GITHUB_TOKEN }}" \
+                    ${{ env.URL_STATUS }} \
+                    -d "
+                    {
+                        \"state\": \"pending\",
+                        \"target_url\": \"${{ env.URL_WORKFLOW }}\",
+                        \"description\": \"GitHub Actions workflow requested\",
+                        \"context\": \"${{ github.repository }}\"
+                    }
+                    "
+
+            - name: Build and Test
+              run: |
+                git clone git@backend.eventflow:${{ github.repository_owner }}/${{ env.REPO_BACKEND }}.git ${{ github.workspace }}/backend
+
+                pushd backend
+                dotnet test -c Release
+                popd
+
+            - name: Mark Commit Success
+              if: success()
+              run: |
+                curl -L \
+                    -X POST \
+                    -H "Accept: application/vnd.github+json" \
+                    -H "Authorization: Bearer ${{ secrets.EF_GITHUB_TOKEN }}" \
+                    ${{ env.URL_STATUS }} \
+                    -d "
+                    {
+                        \"state\": \"success\",
+                        \"target_url\": \"${{ env.URL_WORKFLOW }}\",
+                        \"description\": \"GitHub Actions workflow succeeded\",
+                        \"context\": \"${{ github.repository }}\"
+                    }
+                    "
+
+            - name: Mark Commit Failure
+              if: failure()
+              run: |
+                curl -L \
+                    -X POST \
+                    -H "Accept: application/vnd.github+json" \
+                    -H "Authorization: Bearer ${{ secrets.EF_GITHUB_TOKEN }}" \
+                    ${{ env.URL_STATUS }} \
+                    -d "
+                    {
+                        \"state\": \"failure\",
+                        \"target_url\": \"${{ env.URL_WORKFLOW }}\",
+                        \"description\": \"GitHub Actions workflow failed\",
+                        \"context\": \"${{ github.repository }}\"
+                    }
+                    "
