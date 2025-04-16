@@ -173,7 +173,7 @@ jobs:
             - name: Write Dockerfile
               if: ${{ github.ref == 'refs/heads/master' }}
               run: |
-                git clone git@ci.eventflow:${{ github.repository_owner }}/${{ env.REPO_CI }}.git ${{ github.workspace }}/ci
+                git clone git@ci.eventflow:${{ github.repository_owner }}/${{ env.REPO_CI }}.git ${{ github.workspace }}/ci -b deploy
 
                 pushd ${{ github.workspace }}/ci
 
@@ -208,11 +208,9 @@ jobs:
                 git add .
 
                 git config user.name "EventFlow CI"
-                git config user.email "ci@ef.trungnt2910.com"
+                git config user.email "no-reply+ci@ef.trungnt2910.com"
 
                 git commit -m "deploy: $DATE"
-
-                # TODO: Race condition with human user?
                 git push
 
                 popd
