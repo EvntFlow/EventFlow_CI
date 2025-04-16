@@ -12,45 +12,24 @@ jobs:
         runs-on: ubuntu-latest
         env:
             REPO_FRONTEND: EventFlow_Web
-            COMMIT: ${{ github.event.client_payload.after }}
+            EF_REPO: EventFlow_Web
+            EF_COMMIT: ${{ github.event.client_payload.after }}
         steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Mark Commit Status
+              run: |
+                ./report.sh \
+                  --state "pending" \
+                  --description "GitHub Actions workflow requested" \
+                  --token ${{ secrets.EF_GITHUB_TOKEN }}
+
             - name: Setup Deploy Keys
               env:
                 EF_FRONTEND: ${{ secrets.EF_FRONTEND }}
               run: |
-                mkdir -p $HOME/.ssh
-
-                echo "$EF_FRONTEND" > $HOME/.ssh/ef_frontend
-
-                chmod 0600 $HOME/.ssh/ef*
-
-                echo "
-                    Host frontend.eventflow
-                        Hostname github.com
-                        IdentityFile=$HOME/.ssh/ef_frontend
-                        User git
-                " >> $HOME/.ssh/config
-
-            - name: Export URLs
-              run: |
-                echo "URL_STATUS=${{ github.api_url }}/repos/${{ github.repository_owner }}/${{ env.REPO_FRONTEND }}/statuses/${{ env.COMMIT }}" >> $GITHUB_ENV
-                echo "URL_WORKFLOW=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_ENV
-
-            - name: Mark Commit Status
-              run: |
-                curl -L \
-                    -X POST \
-                    -H "Accept: application/vnd.github+json" \
-                    -H "Authorization: Bearer ${{ secrets.EF_GITHUB_TOKEN }}" \
-                    ${{ env.URL_STATUS }} \
-                    -d "
-                    {
-                        \"state\": \"pending\",
-                        \"target_url\": \"${{ env.URL_WORKFLOW }}\",
-                        \"description\": \"GitHub Actions workflow requested\",
-                        \"context\": \"${{ github.repository }}\"
-                    }
-                    "
+                ./keys.sh --frontend
 
             - name: Build and Test
               run: |
@@ -64,33 +43,15 @@ jobs:
             - name: Mark Commit Success
               if: success()
               run: |
-                curl -L \
-                    -X POST \
-                    -H "Accept: application/vnd.github+json" \
-                    -H "Authorization: Bearer ${{ secrets.EF_GITHUB_TOKEN }}" \
-                    ${{ env.URL_STATUS }} \
-                    -d "
-                    {
-                        \"state\": \"success\",
-                        \"target_url\": \"${{ env.URL_WORKFLOW }}\",
-                        \"description\": \"GitHub Actions workflow succeeded\",
-                        \"context\": \"${{ github.repository }}\"
-                    }
-                    "
+                ./report.sh \
+                  --state "success" \
+                  --description "GitHub Actions workflow succeeded" \
+                  --token ${{ secrets.EF_GITHUB_TOKEN }}
 
             - name: Mark Commit Failure
               if: failure()
               run: |
-                curl -L \
-                    -X POST \
-                    -H "Accept: application/vnd.github+json" \
-                    -H "Authorization: Bearer ${{ secrets.EF_GITHUB_TOKEN }}" \
-                    ${{ env.URL_STATUS }} \
-                    -d "
-                    {
-                        \"state\": \"failure\",
-                        \"target_url\": \"${{ env.URL_WORKFLOW }}\",
-                        \"description\": \"GitHub Actions workflow failed\",
-                        \"context\": \"${{ github.repository }}\"
-                    }
-                    "
+                ./report.sh \
+                  --state "failure" \
+                  --description "GitHub Actions workflow failed" \
+                  --token ${{ secrets.EF_GITHUB_TOKEN }}

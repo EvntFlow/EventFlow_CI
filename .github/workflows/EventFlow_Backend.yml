@@ -12,24 +12,24 @@ jobs:
         runs-on: ubuntu-latest
         env:
             REPO_BACKEND: EventFlow_Backend
-            COMMIT: ${{ github.event.client_payload.after }}
+            EF_REPO: EventFlow_Backend
+            EF_COMMIT: ${{ github.event.client_payload.after }}
         steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Mark Commit Status
+              run: |
+                ./report.sh \
+                  --state "pending" \
+                  --description "GitHub Actions workflow requested" \
+                  --token ${{ secrets.EF_GITHUB_TOKEN }}
+
             - name: Setup Deploy Keys
               env:
                 EF_BACKEND: ${{ secrets.EF_BACKEND }}
               run: |
-                mkdir -p $HOME/.ssh
-
-                echo "$EF_BACKEND" > $HOME/.ssh/ef_backend
-
-                chmod 0600 $HOME/.ssh/ef*
-
-                echo "
-                    Host backend.eventflow
-                        Hostname github.com
-                        IdentityFile=$HOME/.ssh/ef_backend
-                        User git
-                " >> $HOME/.ssh/config
+                ./keys.sh --backend
 
             - name: Setup .NET 9 SDK
               uses: actions/setup-dotnet@v4
@@ -39,27 +39,6 @@ jobs:
             - name: Setup .NET Tools
               run: |
                 dotnet tool install dotnet-ef --global
-
-            - name: Export URLs
-              run: |
-                echo "URL_STATUS=${{ github.api_url }}/repos/${{ github.repository_owner }}/${{ env.REPO_BACKEND }}/statuses/${{ env.COMMIT }}" >> $GITHUB_ENV
-                echo "URL_WORKFLOW=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_ENV
-
-            - name: Mark Commit Status
-              run: |
-                curl -L \
-                    -X POST \
-                    -H "Accept: application/vnd.github+json" \
-                    -H "Authorization: Bearer ${{ secrets.EF_GITHUB_TOKEN }}" \
-                    ${{ env.URL_STATUS }} \
-                    -d "
-                    {
-                        \"state\": \"pending\",
-                        \"target_url\": \"${{ env.URL_WORKFLOW }}\",
-                        \"description\": \"GitHub Actions workflow requested\",
-                        \"context\": \"${{ github.repository }}\"
-                    }
-                    "
 
             - name: Build and Test
               run: |
@@ -72,33 +51,15 @@ jobs:
             - name: Mark Commit Success
               if: success()
               run: |
-                curl -L \
-                    -X POST \
-                    -H "Accept: application/vnd.github+json" \
-                    -H "Authorization: Bearer ${{ secrets.EF_GITHUB_TOKEN }}" \
-                    ${{ env.URL_STATUS }} \
-                    -d "
-                    {
-                        \"state\": \"success\",
-                        \"target_url\": \"${{ env.URL_WORKFLOW }}\",
-                        \"description\": \"GitHub Actions workflow succeeded\",
-                        \"context\": \"${{ github.repository }}\"
-                    }
-                    "
+                ./report.sh \
+                  --state "success" \
+                  --description "GitHub Actions workflow succeeded" \
+                  --token ${{ secrets.EF_GITHUB_TOKEN }}
 
             - name: Mark Commit Failure
               if: failure()
               run: |
-                curl -L \
-                    -X POST \
-                    -H "Accept: application/vnd.github+json" \
-                    -H "Authorization: Bearer ${{ secrets.EF_GITHUB_TOKEN }}" \
-                    ${{ env.URL_STATUS }} \
-                    -d "
-                    {
-                        \"state\": \"failure\",
-                        \"target_url\": \"${{ env.URL_WORKFLOW }}\",
-                        \"description\": \"GitHub Actions workflow failed\",
-                        \"context\": \"${{ github.repository }}\"
-                    }
-                    "
+                ./report.sh \
+                  --state "failure" \
+                  --description "GitHub Actions workflow failed" \
+                  --token ${{ secrets.EF_GITHUB_TOKEN }}

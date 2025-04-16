@@ -24,36 +24,16 @@ jobs:
             REPO_FRONTEND: EventFlow_Web
             REPO_CI: EventFlow_CI
         steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
             - name: Setup Deploy Keys
               env:
                 EF_BACKEND: ${{ secrets.EF_BACKEND }}
                 EF_FRONTEND: ${{ secrets.EF_FRONTEND }}
                 EF_CI: ${{ secrets.EF_CI }}
               run: |
-                mkdir -p $HOME/.ssh
-
-                echo "$EF_BACKEND" > $HOME/.ssh/ef_backend
-                echo "$EF_FRONTEND" > $HOME/.ssh/ef_frontend
-                echo "$EF_CI" > $HOME/.ssh/ef_ci
-
-                chmod 0600 $HOME/.ssh/ef*
-
-                echo "
-                    Host backend.eventflow
-                        Hostname github.com
-                        IdentityFile=$HOME/.ssh/ef_backend
-                        User git
-
-                    Host frontend.eventflow
-                        Hostname github.com
-                        IdentityFile=$HOME/.ssh/ef_frontend
-                        User git
-
-                    Host ci.eventflow
-                        Hostname github.com
-                        IdentityFile=$HOME/.ssh/ef_ci
-                        User git
-                " >> $HOME/.ssh/config
+                ./keys.sh --all
 
             - name: Setup PostgreSQL
               run: |
@@ -80,6 +60,13 @@ jobs:
                 git clone git@backend.eventflow:${{ github.repository_owner }}/${{ env.REPO_BACKEND }}.git ${{ github.workspace }}/backend
 
                 pushd ${{ github.workspace }}/backend
+
+                ${{ github.workspace }}/report.sh \
+                  --state "pending" \
+                  --description "GitHub Actions workflow requested" \
+                  --token ${{ secrets.EF_GITHUB_TOKEN }} \
+                  --repo ${{ env.REPO_BACKEND }} \
+                  --commit $(git rev-parse HEAD)
 
                 # Add Dummy Secrets
                 echo "{
@@ -125,6 +112,13 @@ jobs:
                 git clone git@frontend.eventflow:${{ github.repository_owner }}/${{ env.REPO_FRONTEND }}.git ${{ github.workspace }}/frontend
 
                 pushd ${{ github.workspace }}/frontend/frontend
+
+                ${{ github.workspace }}/report.sh \
+                  --state "pending" \
+                  --description "GitHub Actions workflow requested" \
+                  --token ${{ secrets.EF_GITHUB_TOKEN }} \
+                  --repo ${{ env.REPO_FRONTEND }} \
+                  --commit $(git rev-parse HEAD)
 
                 # Restore
                 npm install
@@ -214,3 +208,50 @@ jobs:
                 git push
 
                 popd
+
+
+            - name: Mark Commit Success
+              if: success()
+              run: |
+                pushd ${{ github.workspace }}/backend
+                ${{ github.workspace }}/report.sh \
+                  --state "success" \
+                  --description "GitHub Actions workflow succeeded" \
+                  --token ${{ secrets.EF_GITHUB_TOKEN }} \
+                  --repo ${{ env.REPO_BACKEND }} \
+                  --commit $(git rev-parse HEAD)
+                popd
+
+                pushd ${{ github.workspace }}/frontend
+                ${{ github.workspace }}/report.sh \
+                  --state "success" \
+                  --description "GitHub Actions workflow succeeded" \
+                  --token ${{ secrets.EF_GITHUB_TOKEN }} \
+                  --repo ${{ env.REPO_FRONTEND }} \
+                  --commit $(git rev-parse HEAD)
+                popd
+
+            - name: Mark Commit Failure
+              if: failure()
+              run: |
+                if [ -d "${{ github.workspace }}/backend" ]; then
+                  pushd ${{ github.workspace }}/backend
+                  ${{ github.workspace }}/report.sh \
+                    --state "failure" \
+                    --description "GitHub Actions workflow failed" \
+                    --token ${{ secrets.EF_GITHUB_TOKEN }} \
+                    --repo ${{ env.REPO_BACKEND }} \
+                    --commit $(git rev-parse HEAD)
+                  popd
+                fi
+
+                if [ -d "${{ github.workspace }}/frontend" ]; then
+                  pushd ${{ github.workspace }}/frontend
+                  ${{ github.workspace }}/report.sh \
+                    --state "failure" \
+                    --description "GitHub Actions workflow failed" \
+                    --token ${{ secrets.EF_GITHUB_TOKEN }} \
+                    --repo ${{ env.REPO_FRONTEND }} \
+                    --commit $(git rev-parse HEAD)
+                  popd
+                fi
