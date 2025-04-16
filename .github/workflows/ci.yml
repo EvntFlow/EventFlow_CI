@@ -3,8 +3,8 @@ on:
     repository_dispatch:
     push:
       paths:
-        - .github/workflows/ci.yml
-        - *.sh
+        - '.github/workflows/ci.yml'
+        - '*.sh'
       branches:
         - master
 
