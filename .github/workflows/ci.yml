@@ -184,7 +184,8 @@ jobs:
                 ENV PATH=\"\${PATH}:/root/.dotnet/tools\"
 
                 # Download archive
-                RUN curl -SL ${{ github.server_url }}/${{ github.repository }}/releases/latest/download/eventflow.tar.gz | tar -xzf -
+                ADD "${{ github.server_url }}/${{ github.repository }}/releases/latest/download/eventflow.tar.gz" eventflow.tar.gz
+                RUN tar -xzf eventflow.tar.gz && rm -f eventflow.tar.gz
 
                 # Load development secrets & copy for publish
                 RUN --mount=type=secret,id=appsettings_Secrets_json,dst=/etc/secrets/appsettings.Secrets.json \
