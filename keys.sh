@@ -3,19 +3,15 @@
 for (( i=1; i<=$#; i++)); do
 case ${!i} in
     --frontend)
-    i=$((i+1))
     KEY_FRONTEND=1
     ;;
     --backend)
-    i=$((i+1))
     KEY_BACKEND=1
     ;;
     --ci)
-    i=$((i+1))
     KEY_CI=1
     ;;
     --all)
-    i=$((i+1))
     KEY_FRONTEND=1
     KEY_BACKEND=1
     KEY_CI=1
