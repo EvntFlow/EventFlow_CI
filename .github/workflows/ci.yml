@@ -1,3 +1,4 @@
+name: Integration Testing
 on:
     workflow_dispatch:
     repository_dispatch:

@@ -1,3 +1,4 @@
+name: Unit Testing (Frontend)
 on:
     repository_dispatch:
         types: [EventFlow_Web]

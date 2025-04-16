@@ -1,3 +1,4 @@
+name: Unit Testing (Backend)
 on:
     repository_dispatch:
         types: [EventFlow_Backend]
