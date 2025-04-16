@@ -26,7 +26,7 @@ done
 
 mkdir -p $HOME/.ssh
 
-if [[ "$BACKEND" == 1 ]]; then
+if [[ "$KEY_BACKEND" == 1 ]]; then
     echo "$EF_BACKEND" > $HOME/.ssh/ef_backend
 
     echo "
@@ -37,7 +37,7 @@ if [[ "$BACKEND" == 1 ]]; then
     " >> $HOME/.ssh/config
 fi
 
-if [[ "$FRONTEND" == 1 ]]; then
+if [[ "$KEY_FRONTEND" == 1 ]]; then
     echo "$EF_FRONTEND" > $HOME/.ssh/ef_frontend
 
     echo "
@@ -48,7 +48,7 @@ if [[ "$FRONTEND" == 1 ]]; then
     " >> $HOME/.ssh/config
 fi
 
-if [[ "$CI" == 1 ]]; then
+if [[ "$KEY_CI" == 1 ]]; then
     echo "$EF_CI" > $HOME/.ssh/ef_ci
 
     echo "
