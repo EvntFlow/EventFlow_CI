@@ -46,7 +46,12 @@ jobs:
                 git clone git@backend.eventflow:${{ github.repository_owner }}/${{ env.REPO_BACKEND }}.git ${{ github.workspace }}/backend
 
                 pushd backend
+
+                git fetch origin ${{ env.EF_COMMIT }}
+                git reset --hard ${{ env.EF_COMMIT }}
+
                 dotnet test -c Release
+
                 popd
 
             - name: Mark Commit Success

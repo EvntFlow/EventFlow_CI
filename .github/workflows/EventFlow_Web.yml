@@ -37,8 +37,13 @@ jobs:
                 git clone git@frontend.eventflow:${{ github.repository_owner }}/${{ env.REPO_FRONTEND }}.git ${{ github.workspace }}/frontend
 
                 pushd frontend/frontend
+
+                git fetch origin ${{ env.EF_COMMIT }}
+                git reset --hard ${{ env.EF_COMMIT }}
+
                 npm install
                 npm run build
+
                 popd
 
             - name: Mark Commit Success
