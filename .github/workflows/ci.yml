@@ -76,7 +76,12 @@ jobs:
                       \"DefaultConnection\": \"Host=localhost; Database=eventflow; Username=sephera; Password=ci\"
                     },
                     \"ApiKeys\": {
-                      \"Postmark\": \"Dummy API Key\"
+                      \"Postmark\": \"Dummy API Key\",
+                      \"Cloudinary\": {
+                        \"CloudName\": \"Dummy API Key\",
+                        \"ApiKey\": \"Dummy API Key\",
+                        \"ApiSecret\": \"Dummy API Key\"
+                      }
                     },
                     \"Authentication\": {
                       \"Google\": {
