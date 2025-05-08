@@ -128,7 +128,7 @@ jobs:
                   --commit $(git rev-parse HEAD)
 
                 # Environment Variables
-                echo '${{ secrets.EF_FRONTEND_ENV }}' > env.local
+                echo '${{ secrets.EF_FRONTEND_ENV }}' > .env.local
 
                 # Restore
                 npm install

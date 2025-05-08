@@ -41,7 +41,7 @@ jobs:
                 git fetch origin ${{ env.EF_COMMIT }}
                 git reset --hard ${{ env.EF_COMMIT }}
 
-                echo '${{ secrets.EF_FRONTEND_ENV }}' > env.local
+                echo '${{ secrets.EF_FRONTEND_ENV }}' > .env.local
 
                 npm install
                 npm run build
